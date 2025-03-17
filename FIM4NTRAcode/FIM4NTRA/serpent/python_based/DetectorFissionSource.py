@@ -1,4 +1,4 @@
-from .common_imports import np, matlab, plt, sns, csr_matrix, eigs
+from .common_imports import np, plt, sns, csr_matrix, eigs
 
 
 class DetectorFissionSource: 

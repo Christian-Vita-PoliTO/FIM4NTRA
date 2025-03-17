@@ -1,4 +1,4 @@
-from .common_imports import np, matlab, re, plt, sns, csr_matrix, eigs
+from .common_imports import np, re, plt, sns, csr_matrix, eigs
 
 
 class FissionMatrix: 
@@ -36,9 +36,11 @@ class FissionMatrix:
                 elif key == "nz":
                     nz = int(float(value))  # nz non è usato direttamente in 2D
 
+                
             # Crea la matrice quando nx e ny sono noti
             if nx and ny and nz and fmtx_t is None:
                 matrix_size = nx * ny * nz
+                print(matrix_size)
                 fmtx_t = np.zeros((matrix_size, matrix_size))
 
             # Legge i valori della matrice
@@ -95,7 +97,7 @@ class FissionMatrix:
             self.fission_source = self.fission_source.real/np.sum(self.fission_source.real)
 
         self.get_fmtx_dim()
-        self.fission_source = self.fission_source.reshape(self.fmxt_dim['nx'],self.fmxt_dim['ny'])
+        self.fission_source = self.fission_source.reshape(self.fmxt_dim['nx'],self.fmxt_dim['ny'],self.fmxt_dim['nz'])
 
         return self.k_eigv , self.fission_source
     
@@ -118,5 +120,61 @@ class FissionMatrix:
         cbar = plt.colorbar()
 
         plt.title("Fission Source by solving eigenvalue problem of the FMTX")
+
+
+    @staticmethod
+    def generate_ifc_file(T_distributions: list, material_name: str, reference_density: float,  nx_xmin_xmax: list, ny_ymin_ymax: list, nz_zmin_zmax: list, density_function = None, directory: str = ""):
+       
+        """
+        Generate an IFC (Input File for Calculations) for a material, specifying the temperature and density distribution.
+
+        Parameters:
+        - material_name (str): Name of the material.
+        - reference_density (float): Reference density for the material.
+        - nx_xmin_xmax (list): [nx, xmin, xmax] for the x-dimension.
+        - ny_ymin_ymax (list): [ny, ymin, ymax] for the y-dimension.
+        - nz_zmin_zmax (list): [nz, zmin, zmax] for the z-dimension.
+        - density_function (Callable, optional): User-defined function to compute density distribution.
+        """
+
+        flatten_T_dist = T_distributions.flatten()
+
+        # Using user-defined relation (function) to generate density distribution.
+        if density_function is not None: 
+            rho_distribution = density_function(flatten_T_dist)
+        else:
+            rho_distribution = np.ones_like(flatten_T_dist)*reference_density
+        
+        
+        # Valori fissi del modello TREAT
+        XMIN, XMAX = nx_xmin_xmax[1], nx_xmin_xmax[2] 
+        YMIN, YMAX = ny_ymin_ymax[1], ny_ymin_ymax[2] 
+        ZMIN, ZMAX = nz_zmin_zmax[1], nz_zmin_zmax[2]
+
+        # Corregge il primo valore di Tdist per il bug TMS di Serpent
+        # self.T_distribution[0] += 0.001
+
+        # Apre il file in modalità scrittura
+        with open(f"{directory}{material_name}.ifc", 'w', newline='\n') as file:
+            # Prima linea: TYPE MAT OUT
+            file.write(f"2 {material_name} 0\n")
+
+            # Terza linea: MESHTYPE
+            file.write("1\n")
+
+            # Quarta linea: mesh cartesiana con coordinate e dimensioni
+            file.write(f"{nx_xmin_xmax[0]} {XMIN:.5f} {XMAX:.5f} {ny_ymin_ymax[0]} {YMIN:.5f} {YMAX:.5f} {nz_zmin_zmax[0]} {ZMIN:.5f} {ZMAX:.5f}\n")
+
+            # Scrive i valori di densità e temperatura in ordine x, y, z
+            i = 0
+            for iz in range(nz_zmin_zmax[0]):
+                for iy in range(ny_ymin_ymax[0]):
+                    for ix in range(nx_xmin_xmax[0]):
+                        file.write(f"{rho_distribution[i]:.6f} {flatten_T_dist[i]:.6f} ")
+                        i += 1
+                    file.write("\n") # Aggiunge una nuova riga al termine di ogni y-loop
+
+
+        print(f"File '{material_name}.ifc' successfully created!")
 
 
